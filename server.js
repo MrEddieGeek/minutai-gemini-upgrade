@@ -6,8 +6,10 @@ import fs from 'fs';
 import path from 'path';
 import mime from 'mime-types';
 import PDFDocument from 'pdfkit';
-import { Deepgram } from '@deepgram/sdk';
+import pkg from '@deepgram/sdk';
 import { GoogleGenAI, createUserContent, Type } from '@google/genai';
+
+const { Deepgram } = pkg;
 
 const app = express();
 app.use(cors());
