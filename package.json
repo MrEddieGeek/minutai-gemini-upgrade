@@ -1,0 +1,21 @@
+{
+  "name": "minutai-gemini-diarize",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@google/genai": "^0.6.0",
+    "@deepgram/sdk": "^2.3.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mime-types": "^2.1.35",
+    "multer": "^1.4.5-lts.1",
+    "pdfkit": "^0.13.0",
+    "markdown-it": "^13.0.1"
+  }
+}

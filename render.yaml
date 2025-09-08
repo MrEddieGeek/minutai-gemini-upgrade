@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: minutai-gemini-upgrade
+    env: docker
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: PORT
+        value: 10000

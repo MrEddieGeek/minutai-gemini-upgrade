@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MinutAI · Gemini (Upgrade)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; max-width: 900px; }
+    header { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; margin-block: 1rem; }
+    .row { display:flex; gap:1rem; flex-wrap: wrap; }
+    textarea { width: 100%; height: 260px; }
+    code, pre { background: #f7f7f7; padding: .5rem; border-radius: 8px; display:block; overflow:auto; }
+    .muted { color: #666; }
+    button { padding: .6rem 1rem; border-radius: 8px; border: 1px solid #ccc; cursor: pointer; }
+    input[type=file] { padding: .4rem; }
+    a.button { display:inline-block; padding:.5rem 1rem; border-radius:8px; background:#0077ff; color:white; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MinutAI · Gemini (Upgrade)</h1>
+    <span class="muted">Diarización (Deepgram) + Minuta (Gemini) + PDF</span>
+  </header>
+
+  <div class="card">
+    <form id="form">
+      <input type="file" id="file" accept="audio/*" required />
+      <button type="submit">Procesar</button>
+    </form>
+    <p id="status" class="muted"></p>
+  </div>
+
+  <div class="row">
+    <div class="card" style="flex:1; min-width: 280px;">
+      <h3>Minuta (JSON)</h3>
+      <pre id="json">{}</pre>
+    </div>
+    <div class="card" style="flex:1; min-width: 280px;">
+      <h3>Resumen (Markdown)</h3>
+      <textarea id="md" readonly></textarea>
+      <p id="pdf" style="margin-top:.6rem"></p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.querySelector('#form');
+    const statusEl = document.querySelector('#status');
+    const jsonEl = document.querySelector('#json');
+    const mdEl = document.querySelector('#md');
+    const pdfEl = document.querySelector('#pdf');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file = document.querySelector('#file').files[0];
+      if (!file) return;
+      statusEl.textContent = 'Subiendo y procesando...';
+      jsonEl.textContent = '';
+      mdEl.value = '';
+      pdfEl.innerHTML = '';
+
+      const body = new FormData();
+      body.append('file', file);
+
+      try {
+        const r = await fetch('/api/process', { method: 'POST', body });
+        if (!r.ok) {
+          const err = await r.json().catch(()=>({error:'unknown'}));
+          throw new Error(err?.error || 'Fallo en el procesamiento');
+        }
+        const data = await r.json();
+        jsonEl.textContent = JSON.stringify(data.minuta, null, 2);
+        mdEl.value = data.resumen_md || '';
+        statusEl.textContent = `Listo ✔ · Modelo: ${data.model}`;
+        if (data.pdf_url) {
+          const link = document.createElement('a');
+          link.href = data.pdf_url;
+          link.className = 'button';
+          link.textContent = 'Descargar PDF de la minuta';
+          link.target = '_blank';
+          pdfEl.appendChild(link);
+        }
+      } catch (err) {
+        statusEl.textContent = 'Error: ' + (err.message || err);
+      }
+    });
+  </script>
+</body>
+</html>
