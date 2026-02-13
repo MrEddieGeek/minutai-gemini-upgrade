@@ -2,14 +2,15 @@ services:
   - type: web
     name: minutai-gemini-upgrade
     env: docker
+    region: oregon
     plan: starter
     autoDeploy: true
     envVars:
-      - key: GEMINI_API_KEY
+      - key: OPENAI_API_KEY
         sync: false
       - key: DEEPGRAM_API_KEY
         sync: false
-      - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
       - key: PORT
         value: 10000
