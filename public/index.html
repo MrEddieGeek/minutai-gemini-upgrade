@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MinutAI · OpenAI</title>
+  <title>MinutAI</title>
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; max-width: 900px; }
     header { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
@@ -13,22 +13,65 @@
     code, pre { background: #f7f7f7; padding: .5rem; border-radius: 8px; display:block; overflow:auto; }
     .muted { color: #666; }
     button { padding: .6rem 1rem; border-radius: 8px; border: 1px solid #ccc; cursor: pointer; }
+    button:hover { background: #f0f0f0; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
     input[type=file] { padding: .4rem; }
+    select { padding: .4rem .6rem; border-radius: 8px; border: 1px solid #ccc; }
     a.button { display:inline-block; padding:.5rem 1rem; border-radius:8px; background:#0077ff; color:white; text-decoration:none; }
+    .file-info { margin-top: .4rem; font-size: .9rem; color: #555; }
+    .file-info.error { color: #d32f2f; font-weight: 500; }
+    .form-row { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+
+    /* Speaker mapping card */
+    .speaker-card { background: #fafafa; }
+    .speaker-card h3 { margin-top: 0; }
+    .speaker-row { display: flex; align-items: center; gap: .5rem; margin-bottom: .4rem; }
+    .speaker-row label { min-width: 110px; font-family: monospace; font-size: .9rem; }
+    .speaker-row input { padding: .3rem .5rem; border: 1px solid #ccc; border-radius: 6px; flex: 1; max-width: 200px; }
+
+    /* Progress steps */
+    .progress-steps { list-style: none; padding: 0; margin: .5rem 0 0 0; }
+    .progress-steps li { padding: .2rem 0; color: #555; font-size: .9rem; }
+    .progress-steps li:last-child { color: #1976d2; font-weight: 500; }
+
+    .actions-row { display: flex; gap: .5rem; margin-top: .6rem; align-items: center; }
+    #regenBtn { background: #0077ff; color: white; border: none; display: none; }
+    #regenBtn:hover { background: #005fcc; }
   </style>
 </head>
 <body>
   <header>
-    <h1>MinutAI · OpenAI</h1>
-    <span class="muted">Diarización (Deepgram) + Minuta (OpenAI) + PDF</span>
+    <h1>MinutAI</h1>
+    <span class="muted">Diarization (Deepgram) + Minutes (OpenAI) + PDF</span>
   </header>
 
   <div class="card">
     <form id="form">
-      <input type="file" id="file" accept="audio/*" required />
-      <button type="submit">Procesar</button>
+      <div class="form-row">
+        <input type="file" id="file" accept="audio/*" required />
+        <select id="language" title="Idioma de la transcripcion">
+          <option value="es">Espanol</option>
+          <option value="en">English</option>
+          <option value="pt">Portugues</option>
+          <option value="fr">Francais</option>
+          <option value="de">Deutsch</option>
+          <option value="it">Italiano</option>
+        </select>
+        <button type="submit" id="submitBtn">Procesar</button>
+      </div>
+      <div id="fileInfo" class="file-info"></div>
     </form>
-    <p id="status" class="muted"></p>
+    <div id="statusArea">
+      <p id="status" class="muted"></p>
+      <ul id="progressSteps" class="progress-steps"></ul>
+    </div>
+  </div>
+
+  <!-- Speaker mapping (hidden until processing completes) -->
+  <div id="speakerCard" class="card speaker-card" style="display:none;">
+    <h3>Mapeo de hablantes</h3>
+    <div id="speakerInputs"></div>
+    <button id="applySpeakers" style="margin-top:.5rem;">Aplicar nombres</button>
   </div>
 
   <div class="row">
@@ -38,50 +81,235 @@
     </div>
     <div class="card" style="flex:1; min-width: 280px;">
       <h3>Resumen (Markdown)</h3>
-      <textarea id="md" readonly></textarea>
-      <p id="pdf" style="margin-top:.6rem"></p>
+      <textarea id="md"></textarea>
+      <div class="actions-row">
+        <p id="pdf" style="margin:0;"></p>
+        <button id="regenBtn">Regenerar PDF</button>
+      </div>
     </div>
   </div>
 
   <script>
     const form = document.querySelector('#form');
     const statusEl = document.querySelector('#status');
+    const progressSteps = document.querySelector('#progressSteps');
     const jsonEl = document.querySelector('#json');
     const mdEl = document.querySelector('#md');
     const pdfEl = document.querySelector('#pdf');
+    const fileInput = document.querySelector('#file');
+    const fileInfo = document.querySelector('#fileInfo');
+    const languageSelect = document.querySelector('#language');
+    const submitBtn = document.querySelector('#submitBtn');
+    const speakerCard = document.querySelector('#speakerCard');
+    const speakerInputs = document.querySelector('#speakerInputs');
+    const applySpeakersBtn = document.querySelector('#applySpeakers');
+    const regenBtn = document.querySelector('#regenBtn');
+
+    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+
+    // Globals for editing
+    window._utterances = [];
+    window._minuta = null;
+    window._resumen_md = '';
+
+    // File size validation
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) { fileInfo.textContent = ''; return; }
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      if (file.size > MAX_FILE_SIZE) {
+        fileInfo.textContent = `${file.name} (${sizeMB} MB) — Excede el limite de 100 MB`;
+        fileInfo.className = 'file-info error';
+        submitBtn.disabled = true;
+      } else {
+        fileInfo.textContent = `${file.name} (${sizeMB} MB)`;
+        fileInfo.className = 'file-info';
+        submitBtn.disabled = false;
+      }
+    });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const file = document.querySelector('#file').files[0];
+      const file = fileInput.files[0];
       if (!file) return;
-      statusEl.textContent = 'Subiendo y procesando...';
+      if (file.size > MAX_FILE_SIZE) return;
+
+      // Reset UI
+      statusEl.textContent = 'Subiendo archivo...';
+      progressSteps.innerHTML = '';
       jsonEl.textContent = '';
       mdEl.value = '';
       pdfEl.innerHTML = '';
+      speakerCard.style.display = 'none';
+      regenBtn.style.display = 'none';
+      submitBtn.disabled = true;
 
       const body = new FormData();
       body.append('file', file);
+      body.append('language', languageSelect.value);
 
       try {
-        const r = await fetch('/api/process', { method: 'POST', body });
-        if (!r.ok) {
-          const err = await r.json().catch(()=>({error:'unknown'}));
+        const response = await fetch('/api/process', { method: 'POST', body });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({ error: 'unknown' }));
           throw new Error(err?.error || 'Fallo en el procesamiento');
         }
+
+        // Read SSE stream
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // keep incomplete line
+
+          let eventName = '';
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              eventName = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
+              const dataStr = line.slice(6);
+              let data;
+              try { data = JSON.parse(dataStr); } catch { continue; }
+
+              if (eventName === 'progress') {
+                statusEl.textContent = data.step;
+                const li = document.createElement('li');
+                li.textContent = data.step;
+                progressSteps.appendChild(li);
+              } else if (eventName === 'complete') {
+                handleComplete(data);
+              } else if (eventName === 'error') {
+                throw new Error(data.error || 'Error del servidor');
+              }
+              eventName = '';
+            }
+          }
+        }
+      } catch (err) {
+        statusEl.textContent = 'Error: ' + (err.message || err);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    function handleComplete(data) {
+      // Store globals
+      window._minuta = data.minuta;
+      window._resumen_md = data.resumen_md || '';
+      window._utterances = data.utterances || [];
+
+      // Populate UI
+      jsonEl.textContent = JSON.stringify(data.minuta, null, 2);
+      mdEl.value = data.resumen_md || '';
+      statusEl.textContent = `Listo — Modelo: ${data.model}`;
+
+      if (data.pdf_url) {
+        const link = document.createElement('a');
+        link.href = data.pdf_url;
+        link.className = 'button';
+        link.textContent = 'Descargar PDF';
+        link.target = '_blank';
+        pdfEl.appendChild(link);
+      }
+
+      // Show regenerate button
+      regenBtn.style.display = 'inline-block';
+
+      // Build speaker mapping UI
+      buildSpeakerMapping(data.utterances || []);
+    }
+
+    function buildSpeakerMapping(utterances) {
+      const speakers = [...new Set(utterances.map(u => u.speaker))];
+      if (speakers.length === 0) return;
+
+      speakerInputs.innerHTML = '';
+      speakers.forEach(spk => {
+        const row = document.createElement('div');
+        row.className = 'speaker-row';
+        row.innerHTML = `<label>${spk}:</label><input type="text" data-speaker="${spk}" placeholder="Nombre real" />`;
+        speakerInputs.appendChild(row);
+      });
+      speakerCard.style.display = 'block';
+    }
+
+    // Apply speaker names
+    applySpeakersBtn.addEventListener('click', () => {
+      const inputs = speakerInputs.querySelectorAll('input[data-speaker]');
+      const mapping = {};
+      inputs.forEach(inp => {
+        const name = inp.value.trim();
+        if (name) mapping[inp.dataset.speaker] = name;
+      });
+
+      if (Object.keys(mapping).length === 0) return;
+
+      // Replace in minuta JSON string
+      let minutaStr = JSON.stringify(window._minuta, null, 2);
+      // Replace in markdown
+      let mdStr = mdEl.value;
+
+      for (const [spk, name] of Object.entries(mapping)) {
+        const regex = new RegExp(spk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+        minutaStr = minutaStr.replace(regex, name);
+        mdStr = mdStr.replace(regex, name);
+      }
+
+      // Update globals and UI
+      try { window._minuta = JSON.parse(minutaStr); } catch {}
+      window._resumen_md = mdStr;
+      jsonEl.textContent = minutaStr;
+      mdEl.value = mdStr;
+
+      // Update utterances too
+      window._utterances = window._utterances.map(u => ({
+        ...u,
+        speaker: mapping[u.speaker] || u.speaker,
+        transcript: Object.entries(mapping).reduce(
+          (t, [spk, name]) => t.replace(new RegExp(spk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), name), u.transcript
+        )
+      }));
+
+      statusEl.textContent = 'Nombres de hablantes aplicados.';
+    });
+
+    // Regenerate PDF
+    regenBtn.addEventListener('click', async () => {
+      regenBtn.disabled = true;
+      regenBtn.textContent = 'Generando...';
+      try {
+        const r = await fetch('/api/regenerate-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ markdown: mdEl.value })
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({ error: 'unknown' }));
+          throw new Error(err?.error || 'Fallo regenerando PDF');
+        }
         const data = await r.json();
-        jsonEl.textContent = JSON.stringify(data.minuta, null, 2);
-        mdEl.value = data.resumen_md || '';
-        statusEl.textContent = `Listo ✔ · Modelo: ${data.model}`;
+        pdfEl.innerHTML = '';
         if (data.pdf_url) {
           const link = document.createElement('a');
           link.href = data.pdf_url;
           link.className = 'button';
-          link.textContent = 'Descargar PDF de la minuta';
+          link.textContent = 'Descargar PDF';
           link.target = '_blank';
           pdfEl.appendChild(link);
         }
+        statusEl.textContent = 'PDF regenerado.';
       } catch (err) {
         statusEl.textContent = 'Error: ' + (err.message || err);
+      } finally {
+        regenBtn.disabled = false;
+        regenBtn.textContent = 'Regenerar PDF';
       }
     });
   </script>
