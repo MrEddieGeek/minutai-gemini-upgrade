@@ -58,111 +58,108 @@ function getLanguageName(code) {
   return map[code] || map.es;
 }
 
+// Util: extract plain text from inline token children
+function inlineToSegments(children) {
+  const segments = [];
+  let buf = '';
+  let bold = false;
+  for (const c of children) {
+    if (c.type === 'strong_open') {
+      if (buf) { segments.push({ text: buf, bold }); buf = ''; }
+      bold = true;
+    } else if (c.type === 'strong_close') {
+      if (buf) { segments.push({ text: buf, bold }); buf = ''; }
+      bold = false;
+    } else if (c.type === 'softbreak') {
+      buf += ' ';
+    } else if (c.type === 'text' || c.type === 'code_inline') {
+      buf += c.content;
+    }
+    // skip em_open/em_close and other inline markers
+  }
+  if (buf) segments.push({ text: buf, bold });
+  return segments;
+}
+
 // Util: render markdown to PDF using markdown-it tokens + PDFKit
 function renderMarkdownToPDF(doc, markdown) {
   const tokens = md.parse(markdown, {});
-  let isBold = false;
   let isBullet = false;
-  let headingLevel = 0;
+  let inTable = false;
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
 
+    // --- Headings ---
     if (token.type === 'heading_open') {
-      headingLevel = parseInt(token.tag.replace('h', ''), 10);
+      const level = parseInt(token.tag.replace('h', ''), 10);
       const sizes = { 1: 18, 2: 16, 3: 14, 4: 13, 5: 12, 6: 11 };
-      doc.fontSize(sizes[headingLevel] || 14).font('Helvetica-Bold');
+      doc.fontSize(sizes[level] || 14).font('Helvetica-Bold');
       continue;
     }
-
     if (token.type === 'heading_close') {
       doc.moveDown(0.3);
-      headingLevel = 0;
       doc.fontSize(11).font('Helvetica');
       continue;
     }
 
-    if (token.type === 'bullet_list_open') {
-      isBullet = true;
-      continue;
-    }
-    if (token.type === 'bullet_list_close') {
-      isBullet = false;
-      doc.moveDown(0.3);
-      continue;
-    }
+    // --- Bullet lists ---
+    if (token.type === 'bullet_list_open') { isBullet = true; continue; }
+    if (token.type === 'bullet_list_close') { isBullet = false; doc.moveDown(0.3); continue; }
+    if (token.type === 'ordered_list_open') { isBullet = true; continue; }
+    if (token.type === 'ordered_list_close') { isBullet = false; doc.moveDown(0.3); continue; }
+    if (token.type === 'list_item_open' || token.type === 'list_item_close') continue;
 
-    if (token.type === 'list_item_open') continue;
-    if (token.type === 'list_item_close') continue;
-
+    // --- Paragraphs ---
     if (token.type === 'paragraph_open') continue;
-    if (token.type === 'paragraph_close') {
-      if (!isBullet) doc.moveDown(0.4);
-      continue;
-    }
+    if (token.type === 'paragraph_close') { if (!isBullet && !inTable) doc.moveDown(0.4); continue; }
 
+    // --- Tables: render as simple text rows ---
+    if (token.type === 'table_open') { inTable = true; continue; }
+    if (token.type === 'table_close') { inTable = false; doc.moveDown(0.3); continue; }
+    if (token.type === 'thead_open' || token.type === 'thead_close') continue;
+    if (token.type === 'tbody_open' || token.type === 'tbody_close') continue;
+    if (token.type === 'tr_open') continue;
+    if (token.type === 'tr_close') continue;
+    if (token.type === 'th_open' || token.type === 'th_close') continue;
+    if (token.type === 'td_open' || token.type === 'td_close') continue;
+
+    // --- Inline content ---
     if (token.type === 'inline' && token.children) {
-      const indent = isBullet ? 20 : 0;
-      if (isBullet) {
-        doc.text('', { indent: 0 }); // flush
-      }
-      let lineText = '';
-      // We'll build segments and render them
-      const segments = [];
-      for (const child of token.children) {
-        if (child.type === 'strong_open') {
-          if (lineText) segments.push({ text: lineText, bold: false });
-          lineText = '';
-          isBold = true;
-          continue;
-        }
-        if (child.type === 'strong_close') {
-          if (lineText) segments.push({ text: lineText, bold: true });
-          lineText = '';
-          isBold = false;
-          continue;
-        }
-        if (child.type === 'em_open' || child.type === 'em_close') continue;
-        if (child.type === 'softbreak') {
-          lineText += ' ';
-          continue;
-        }
-        if (child.type === 'text' || child.type === 'code_inline') {
-          lineText += child.content;
-        }
-      }
-      if (lineText) segments.push({ text: lineText, bold: isBold });
-
-      // Render segments
-      const prefix = isBullet ? '  \u2022  ' : '';
-      const xIndent = isBullet ? indent : 0;
-
+      const segments = inlineToSegments(token.children);
       if (segments.length === 0) continue;
 
-      // Simple case: single segment
-      if (segments.length === 1) {
-        const s = segments[0];
-        doc.font(s.bold ? 'Helvetica-Bold' : 'Helvetica');
-        if (headingLevel === 0) doc.fontSize(11);
-        doc.text(prefix + s.text, { indent: xIndent, lineGap: 2 });
+      // Flatten all segments into a single string for simple rendering
+      const prefix = isBullet ? '  \u2022  ' : '';
+      const fullText = prefix + segments.map(s => s.text).join('');
+
+      // Check if any segment is bold
+      const hasMixed = segments.some(s => s.bold) && segments.some(s => !s.bold);
+
+      if (!hasMixed) {
+        // Uniform style — single text call
+        const bold = segments[0].bold;
+        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(11);
+        doc.text(fullText, { indent: isBullet ? 20 : 0, lineGap: 2 });
       } else {
-        // Multiple segments: use doc.text with continued
+        // Mixed bold/normal — use continued
         for (let si = 0; si < segments.length; si++) {
           const s = segments[si];
-          doc.font(s.bold ? 'Helvetica-Bold' : 'Helvetica');
-          if (headingLevel === 0) doc.fontSize(11);
+          doc.font(s.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(11);
           const txt = si === 0 ? prefix + s.text : s.text;
-          const opts = si < segments.length - 1
-            ? { continued: true, indent: si === 0 ? xIndent : 0, lineGap: 2 }
-            : { indent: 0, lineGap: 2 };
-          doc.text(txt, opts);
+          const isLast = si === segments.length - 1;
+          doc.text(txt, {
+            continued: !isLast,
+            indent: si === 0 && isBullet ? 20 : 0,
+            lineGap: 2
+          });
         }
       }
       doc.font('Helvetica');
       continue;
     }
 
-    // Fallback for hr, code blocks, etc.
+    // --- Horizontal rule ---
     if (token.type === 'hr') {
       doc.moveDown(0.5);
       doc.moveTo(doc.x, doc.y).lineTo(doc.x + 450, doc.y).stroke('#cccccc');
@@ -170,6 +167,7 @@ function renderMarkdownToPDF(doc, markdown) {
       continue;
     }
 
+    // --- Code blocks ---
     if (token.type === 'fence' || token.type === 'code_block') {
       doc.fontSize(10).font('Courier').text(token.content, { indent: 10 });
       doc.font('Helvetica').fontSize(11);
@@ -353,19 +351,17 @@ app.post('/api/process', (req, res, next) => {
       stream.on('error', reject);
     });
 
-    // 5) Send complete event
+    // 5) Send complete event — only include unique speaker IDs (not full utterances)
     const pdf_url = `/download/${encodeURIComponent(pdfName)}`;
+    const speakers = [...new Set(
+      utterances.map(u => u.speaker !== undefined ? `SPEAKER_${u.speaker}` : `SPEAKER_0`)
+    )];
     sendSSE(res, 'complete', {
       model: OPENAI_MODEL,
       minuta,
       resumen_md,
       pdf_url,
-      utterances: utterances.map(u => ({
-        speaker: u.speaker !== undefined ? `SPEAKER_${u.speaker}` : `SPEAKER_0`,
-        start: u.start,
-        end: u.end,
-        transcript: u.transcript
-      })),
+      speakers,
       diarization: { transcript, utterances_count: utterances.length || 0 }
     });
 

@@ -108,7 +108,6 @@
     const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
     // Globals for editing
-    window._utterances = [];
     window._minuta = null;
     window._resumen_md = '';
 
@@ -203,7 +202,6 @@
       // Store globals
       window._minuta = data.minuta;
       window._resumen_md = data.resumen_md || '';
-      window._utterances = data.utterances || [];
 
       // Populate UI
       jsonEl.textContent = JSON.stringify(data.minuta, null, 2);
@@ -222,12 +220,11 @@
       // Show regenerate button
       regenBtn.style.display = 'inline-block';
 
-      // Build speaker mapping UI
-      buildSpeakerMapping(data.utterances || []);
+      // Build speaker mapping UI from speaker IDs
+      buildSpeakerMapping(data.speakers || []);
     }
 
-    function buildSpeakerMapping(utterances) {
-      const speakers = [...new Set(utterances.map(u => u.speaker))];
+    function buildSpeakerMapping(speakers) {
       if (speakers.length === 0) return;
 
       speakerInputs.innerHTML = '';
@@ -267,15 +264,6 @@
       window._resumen_md = mdStr;
       jsonEl.textContent = minutaStr;
       mdEl.value = mdStr;
-
-      // Update utterances too
-      window._utterances = window._utterances.map(u => ({
-        ...u,
-        speaker: mapping[u.speaker] || u.speaker,
-        transcript: Object.entries(mapping).reduce(
-          (t, [spk, name]) => t.replace(new RegExp(spk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), name), u.transcript
-        )
-      }));
 
       statusEl.textContent = 'Nombres de hablantes aplicados.';
     });
