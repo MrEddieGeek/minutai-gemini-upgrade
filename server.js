@@ -136,25 +136,10 @@ function renderMarkdownToPDF(doc, markdown) {
       // Check if any segment is bold
       const hasMixed = segments.some(s => s.bold) && segments.some(s => !s.bold);
 
-      if (!hasMixed) {
-        // Uniform style — single text call
-        const bold = segments[0].bold;
-        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(11);
-        doc.text(fullText, { indent: isBullet ? 20 : 0, lineGap: 2 });
-      } else {
-        // Mixed bold/normal — use continued
-        for (let si = 0; si < segments.length; si++) {
-          const s = segments[si];
-          doc.font(s.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(11);
-          const txt = si === 0 ? prefix + s.text : s.text;
-          const isLast = si === segments.length - 1;
-          doc.text(txt, {
-            continued: !isLast,
-            indent: si === 0 && isBullet ? 20 : 0,
-            lineGap: 2
-          });
-        }
-      }
+      // Render as single text call to avoid PDFKit hanging with continued:true on page breaks
+      const hasBold = segments.some(s => s.bold);
+      doc.font(hasBold ? 'Helvetica-Bold' : 'Helvetica').fontSize(11);
+      doc.text(fullText, { indent: isBullet ? 20 : 0, lineGap: 2 });
       doc.font('Helvetica');
       continue;
     }
@@ -335,21 +320,24 @@ app.post('/api/process', (req, res, next) => {
     const pdfName = path.basename(filePath) + '.pdf';
     const pdfPath = path.join(UPLOAD_DIR, pdfName);
 
-    await new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50 });
-      const stream = fs.createWriteStream(pdfPath);
-      doc.pipe(stream);
-      doc.fontSize(20).font('Helvetica-Bold').text('Minuta ejecutiva', { align: 'center' });
-      doc.moveDown(0.3);
-      doc.fontSize(10).font('Helvetica').text(`Generado: ${new Date().toISOString()}`, { align: 'center' });
-      doc.moveDown(1);
+    await Promise.race([
+      new Promise((resolve, reject) => {
+        const doc = new PDFDocument({ margin: 50 });
+        const stream = fs.createWriteStream(pdfPath);
+        doc.pipe(stream);
+        doc.fontSize(20).font('Helvetica-Bold').text('Minuta ejecutiva', { align: 'center' });
+        doc.moveDown(0.3);
+        doc.fontSize(10).font('Helvetica').text(`Generado: ${new Date().toISOString()}`, { align: 'center' });
+        doc.moveDown(1);
 
-      renderMarkdownToPDF(doc, resumen_md);
+        renderMarkdownToPDF(doc, resumen_md);
 
-      doc.end();
-      stream.on('finish', resolve);
-      stream.on('error', reject);
-    });
+        doc.end();
+        stream.on('finish', resolve);
+        stream.on('error', reject);
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('PDF generation timed out after 30s')), 30000))
+    ]);
 
     // 5) Send complete event — only include unique speaker IDs (not full utterances)
     const pdf_url = `/download/${encodeURIComponent(pdfName)}`;
@@ -387,21 +375,24 @@ app.post('/api/regenerate-pdf', async (req, res) => {
     const pdfName = `regen-${Date.now()}.pdf`;
     const pdfPath = path.join(UPLOAD_DIR, pdfName);
 
-    await new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50 });
-      const stream = fs.createWriteStream(pdfPath);
-      doc.pipe(stream);
-      doc.fontSize(20).font('Helvetica-Bold').text('Minuta ejecutiva', { align: 'center' });
-      doc.moveDown(0.3);
-      doc.fontSize(10).font('Helvetica').text(`Generado: ${new Date().toISOString()}`, { align: 'center' });
-      doc.moveDown(1);
+    await Promise.race([
+      new Promise((resolve, reject) => {
+        const doc = new PDFDocument({ margin: 50 });
+        const stream = fs.createWriteStream(pdfPath);
+        doc.pipe(stream);
+        doc.fontSize(20).font('Helvetica-Bold').text('Minuta ejecutiva', { align: 'center' });
+        doc.moveDown(0.3);
+        doc.fontSize(10).font('Helvetica').text(`Generado: ${new Date().toISOString()}`, { align: 'center' });
+        doc.moveDown(1);
 
-      renderMarkdownToPDF(doc, markdown);
+        renderMarkdownToPDF(doc, markdown);
 
-      doc.end();
-      stream.on('finish', resolve);
-      stream.on('error', reject);
-    });
+        doc.end();
+        stream.on('finish', resolve);
+        stream.on('error', reject);
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('PDF generation timed out after 30s')), 30000))
+    ]);
 
     const pdf_url = `/download/${encodeURIComponent(pdfName)}`;
     res.json({ pdf_url });
