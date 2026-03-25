@@ -133,13 +133,19 @@ function renderMarkdownToPDF(doc, markdown) {
       const prefix = isBullet ? '  \u2022  ' : '';
       const fullText = prefix + segments.map(s => s.text).join('');
 
-      // Check if any segment is bold
-      const hasMixed = segments.some(s => s.bold) && segments.some(s => !s.bold);
-
-      // Render as single text call to avoid PDFKit hanging with continued:true on page breaks
+      // Render line-by-line to prevent PDFKit from hanging on large text spanning many pages
       const hasBold = segments.some(s => s.bold);
       doc.font(hasBold ? 'Helvetica-Bold' : 'Helvetica').fontSize(11);
-      doc.text(fullText, { indent: isBullet ? 20 : 0, lineGap: 2 });
+      const indent = isBullet ? 20 : 0;
+      // Split long text into lines to avoid PDFKit page-break hang
+      const lines = fullText.split('\n');
+      for (const line of lines) {
+        if (line.trim()) {
+          doc.text(line, { indent, lineGap: 2 });
+        } else {
+          doc.moveDown(0.2);
+        }
+      }
       doc.font('Helvetica');
       continue;
     }
@@ -154,7 +160,12 @@ function renderMarkdownToPDF(doc, markdown) {
 
     // --- Code blocks ---
     if (token.type === 'fence' || token.type === 'code_block') {
-      doc.fontSize(10).font('Courier').text(token.content, { indent: 10 });
+      doc.fontSize(10).font('Courier');
+      // Render line-by-line to avoid PDFKit hang on large code blocks
+      const codeLines = (token.content || '').split('\n');
+      for (const cl of codeLines) {
+        doc.text(cl || ' ', { indent: 10 });
+      }
       doc.font('Helvetica').fontSize(11);
       doc.moveDown(0.3);
       continue;
@@ -320,24 +331,28 @@ app.post('/api/process', (req, res, next) => {
     const pdfName = path.basename(filePath) + '.pdf';
     const pdfPath = path.join(UPLOAD_DIR, pdfName);
 
-    await Promise.race([
-      new Promise((resolve, reject) => {
-        const doc = new PDFDocument({ margin: 50 });
-        const stream = fs.createWriteStream(pdfPath);
-        doc.pipe(stream);
-        doc.fontSize(20).font('Helvetica-Bold').text('Minuta ejecutiva', { align: 'center' });
-        doc.moveDown(0.3);
-        doc.fontSize(10).font('Helvetica').text(`Generado: ${new Date().toISOString()}`, { align: 'center' });
-        doc.moveDown(1);
+    console.log(`[PDF] Starting generation, markdown length: ${resumen_md.length} chars`);
+    const pdfStart = Date.now();
 
-        renderMarkdownToPDF(doc, resumen_md);
+    await new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 50 });
+      const stream = fs.createWriteStream(pdfPath);
+      doc.pipe(stream);
+      doc.fontSize(20).font('Helvetica-Bold').text('Minuta ejecutiva', { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(10).font('Helvetica').text(`Generado: ${new Date().toISOString()}`, { align: 'center' });
+      doc.moveDown(1);
 
-        doc.end();
-        stream.on('finish', resolve);
-        stream.on('error', reject);
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('PDF generation timed out after 30s')), 30000))
-    ]);
+      renderMarkdownToPDF(doc, resumen_md);
+
+      console.log(`[PDF] Rendering done in ${Date.now() - pdfStart}ms, finalizing...`);
+      doc.end();
+      stream.on('finish', () => {
+        console.log(`[PDF] Complete in ${Date.now() - pdfStart}ms`);
+        resolve();
+      });
+      stream.on('error', reject);
+    });
 
     // 5) Send complete event — only include unique speaker IDs (not full utterances)
     const pdf_url = `/download/${encodeURIComponent(pdfName)}`;
@@ -375,24 +390,21 @@ app.post('/api/regenerate-pdf', async (req, res) => {
     const pdfName = `regen-${Date.now()}.pdf`;
     const pdfPath = path.join(UPLOAD_DIR, pdfName);
 
-    await Promise.race([
-      new Promise((resolve, reject) => {
-        const doc = new PDFDocument({ margin: 50 });
-        const stream = fs.createWriteStream(pdfPath);
-        doc.pipe(stream);
-        doc.fontSize(20).font('Helvetica-Bold').text('Minuta ejecutiva', { align: 'center' });
-        doc.moveDown(0.3);
-        doc.fontSize(10).font('Helvetica').text(`Generado: ${new Date().toISOString()}`, { align: 'center' });
-        doc.moveDown(1);
+    await new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 50 });
+      const stream = fs.createWriteStream(pdfPath);
+      doc.pipe(stream);
+      doc.fontSize(20).font('Helvetica-Bold').text('Minuta ejecutiva', { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(10).font('Helvetica').text(`Generado: ${new Date().toISOString()}`, { align: 'center' });
+      doc.moveDown(1);
 
-        renderMarkdownToPDF(doc, markdown);
+      renderMarkdownToPDF(doc, markdown);
 
-        doc.end();
-        stream.on('finish', resolve);
-        stream.on('error', reject);
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('PDF generation timed out after 30s')), 30000))
-    ]);
+      doc.end();
+      stream.on('finish', resolve);
+      stream.on('error', reject);
+    });
 
     const pdf_url = `/download/${encodeURIComponent(pdfName)}`;
     res.json({ pdf_url });
