@@ -80,6 +80,7 @@
       <pre id="json">{}</pre>
       <div class="actions-row">
         <button id="downloadJson" style="display:none;">Descargar JSON</button>
+        <a id="downloadTranscript" class="button" style="display:none; font-size:.85rem;" target="_blank">Descargar Transcripcion</a>
       </div>
     </div>
     <div class="card" style="flex:1; min-width: 280px;">
@@ -108,6 +109,7 @@
     const applySpeakersBtn = document.querySelector('#applySpeakers');
     const regenBtn = document.querySelector('#regenBtn');
     const downloadJsonBtn = document.querySelector('#downloadJson');
+    const downloadTranscriptBtn = document.querySelector('#downloadTranscript');
 
     const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
@@ -146,6 +148,7 @@
       speakerCard.style.display = 'none';
       regenBtn.style.display = 'none';
       downloadJsonBtn.style.display = 'none';
+      downloadTranscriptBtn.style.display = 'none';
       submitBtn.disabled = true;
 
       const body = new FormData();
@@ -234,6 +237,10 @@
       // Show action buttons
       regenBtn.style.display = 'inline-block';
       downloadJsonBtn.style.display = 'inline-block';
+      if (data.transcript_url) {
+        downloadTranscriptBtn.href = data.transcript_url;
+        downloadTranscriptBtn.style.display = 'inline-block';
+      }
 
       // Build speaker mapping UI from speaker IDs
       buildSpeakerMapping(data.speakers || []);

@@ -354,7 +354,24 @@ app.post('/api/process', (req, res, next) => {
       stream.on('error', reject);
     });
 
-    // 5) Send complete event — only include unique speaker IDs (not full utterances)
+    // 5) Save full transcription as JSON file
+    const transcriptName = path.basename(filePath) + '.transcript.json';
+    const transcriptPath = path.join(UPLOAD_DIR, transcriptName);
+    const transcriptData = {
+      language,
+      utterances_count: utterances.length,
+      transcript: diarized_text,
+      utterances: utterances.map(u => ({
+        speaker: u.speaker !== undefined ? `SPEAKER_${u.speaker}` : 'SPEAKER_0',
+        start: u.start,
+        end: u.end,
+        text: u.transcript
+      }))
+    };
+    fs.writeFileSync(transcriptPath, JSON.stringify(transcriptData, null, 2));
+    const transcript_url = `/download/${encodeURIComponent(transcriptName)}`;
+
+    // 6) Send complete event
     const pdf_url = `/download/${encodeURIComponent(pdfName)}`;
     const speakers = [...new Set(
       utterances.map(u => u.speaker !== undefined ? `SPEAKER_${u.speaker}` : `SPEAKER_0`)
@@ -364,6 +381,7 @@ app.post('/api/process', (req, res, next) => {
       minuta,
       resumen_md,
       pdf_url,
+      transcript_url,
       speakers
     };
     console.log(`[SSE] Sending complete event, payload size: ${JSON.stringify(completePayload).length} chars`);
