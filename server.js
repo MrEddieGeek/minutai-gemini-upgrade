@@ -359,14 +359,15 @@ app.post('/api/process', (req, res, next) => {
     const speakers = [...new Set(
       utterances.map(u => u.speaker !== undefined ? `SPEAKER_${u.speaker}` : `SPEAKER_0`)
     )];
-    sendSSE(res, 'complete', {
+    const completePayload = {
       model: OPENAI_MODEL,
       minuta,
       resumen_md,
       pdf_url,
-      speakers,
-      diarization: { transcript, utterances_count: utterances.length || 0 }
-    });
+      speakers
+    };
+    console.log(`[SSE] Sending complete event, payload size: ${JSON.stringify(completePayload).length} chars`);
+    sendSSE(res, 'complete', completePayload);
 
     res.end();
 
