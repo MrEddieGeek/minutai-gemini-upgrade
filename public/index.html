@@ -78,6 +78,9 @@
     <div class="card" style="flex:1; min-width: 280px;">
       <h3>Minuta (JSON)</h3>
       <pre id="json">{}</pre>
+      <div class="actions-row">
+        <button id="downloadJson" style="display:none;">Descargar JSON</button>
+      </div>
     </div>
     <div class="card" style="flex:1; min-width: 280px;">
       <h3>Resumen (Markdown)</h3>
@@ -104,6 +107,7 @@
     const speakerInputs = document.querySelector('#speakerInputs');
     const applySpeakersBtn = document.querySelector('#applySpeakers');
     const regenBtn = document.querySelector('#regenBtn');
+    const downloadJsonBtn = document.querySelector('#downloadJson');
 
     const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
@@ -141,6 +145,7 @@
       pdfEl.innerHTML = '';
       speakerCard.style.display = 'none';
       regenBtn.style.display = 'none';
+      downloadJsonBtn.style.display = 'none';
       submitBtn.disabled = true;
 
       const body = new FormData();
@@ -226,8 +231,9 @@
         pdfEl.appendChild(link);
       }
 
-      // Show regenerate button
+      // Show action buttons
       regenBtn.style.display = 'inline-block';
+      downloadJsonBtn.style.display = 'inline-block';
 
       // Build speaker mapping UI from speaker IDs
       buildSpeakerMapping(data.speakers || []);
@@ -308,6 +314,18 @@
         regenBtn.disabled = false;
         regenBtn.textContent = 'Regenerar PDF';
       }
+    });
+
+    // Download JSON
+    downloadJsonBtn.addEventListener('click', () => {
+      const json = JSON.stringify(window._minuta, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'minuta.json';
+      a.click();
+      URL.revokeObjectURL(url);
     });
   </script>
 </body>
