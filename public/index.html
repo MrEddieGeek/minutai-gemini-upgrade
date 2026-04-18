@@ -3,95 +3,527 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MinutAI</title>
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#f4efe6" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#141722" media="(prefers-color-scheme: dark)" />
+  <title>MinutAI — Transcripcion y minuta</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; max-width: 900px; }
-    header { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; margin-block: 1rem; }
-    .row { display:flex; gap:1rem; flex-wrap: wrap; }
-    textarea { width: 100%; height: 260px; }
-    code, pre { background: #f7f7f7; padding: .5rem; border-radius: 8px; display:block; overflow:auto; }
-    .muted { color: #666; }
-    button { padding: .6rem 1rem; border-radius: 8px; border: 1px solid #ccc; cursor: pointer; }
-    button:hover { background: #f0f0f0; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    input[type=file] { padding: .4rem; }
-    select { padding: .4rem .6rem; border-radius: 8px; border: 1px solid #ccc; }
-    a.button { display:inline-block; padding:.5rem 1rem; border-radius:8px; background:#0077ff; color:white; text-decoration:none; }
-    .file-info { margin-top: .4rem; font-size: .9rem; color: #555; }
-    .file-info.error { color: #d32f2f; font-weight: 500; }
-    .form-row { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+    :root {
+      color-scheme: light dark;
 
-    /* Speaker mapping card */
-    .speaker-card { background: #fafafa; }
-    .speaker-card h3 { margin-top: 0; }
-    .speaker-row { display: flex; align-items: center; gap: .5rem; margin-bottom: .4rem; }
-    .speaker-row label { min-width: 110px; font-family: monospace; font-size: .9rem; }
-    .speaker-row input { padding: .3rem .5rem; border: 1px solid #ccc; border-radius: 6px; flex: 1; max-width: 200px; }
+      /* Spacing — 4pt semantic scale */
+      --space-2xs: 0.25rem;
+      --space-xs:  0.5rem;
+      --space-sm:  0.75rem;
+      --space-md:  1rem;
+      --space-lg:  1.5rem;
+      --space-xl:  2rem;
+      --space-2xl: 3rem;
+      --space-3xl: 4.5rem;
 
-    /* Progress steps */
-    .progress-steps { list-style: none; padding: 0; margin: .5rem 0 0 0; }
-    .progress-steps li { padding: .2rem 0; color: #555; font-size: .9rem; }
-    .progress-steps li:last-child { color: #1976d2; font-weight: 500; }
+      /* Radius */
+      --radius-sm: 2px;
+      --radius-md: 4px;
+      --radius-lg: 8px;
 
-    .actions-row { display: flex; gap: .5rem; margin-top: .6rem; align-items: center; }
-    #regenBtn { background: #0077ff; color: white; border: none; display: none; }
-    #regenBtn:hover { background: #005fcc; }
+      /* Typography */
+      --font-display: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+      --font-body:    "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+      --font-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+      /* Modular scale, base 16px, ratio ~1.25 */
+      --text-xs:   0.75rem;
+      --text-sm:   0.875rem;
+      --text-base: 1rem;
+      --text-md:   1.125rem;
+      --text-lg:   1.375rem;
+      --text-xl:   1.75rem;
+      --text-2xl:  2.25rem;
+
+      /* Colors — OKLCH, neutrals tinted toward indigo */
+      --color-bg:             light-dark(oklch(96.5% 0.010 85), oklch(16% 0.012 265));
+      --color-surface:        light-dark(oklch(99% 0.004 85),   oklch(20% 0.014 265));
+      --color-surface-sunken: light-dark(oklch(93% 0.012 85),   oklch(13.5% 0.012 265));
+      --color-border:         light-dark(oklch(85% 0.014 85),   oklch(30% 0.018 265));
+      --color-border-strong:  light-dark(oklch(68% 0.02 85),    oklch(46% 0.022 265));
+      --color-text:           light-dark(oklch(22% 0.018 265),  oklch(94% 0.01 85));
+      --color-text-muted:     light-dark(oklch(46% 0.02 265),   oklch(70% 0.015 85));
+      --color-text-subtle:    light-dark(oklch(60% 0.02 265),   oklch(56% 0.015 85));
+      --color-accent:         light-dark(oklch(36% 0.14 262),   oklch(76% 0.12 262));
+      --color-accent-hover:   light-dark(oklch(30% 0.15 262),   oklch(82% 0.10 262));
+      --color-on-accent:      light-dark(oklch(98% 0.005 85),   oklch(16% 0.010 265));
+      --color-danger:         light-dark(oklch(44% 0.17 25),    oklch(74% 0.16 25));
+      --color-focus:          light-dark(oklch(55% 0.18 262),   oklch(76% 0.16 262));
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      background: var(--color-bg);
+      color: var(--color-text);
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      line-height: 1.55;
+      font-feature-settings: "kern", "liga", "tnum" 0;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    ::selection { background: var(--color-accent); color: var(--color-on-accent); }
+
+    /* Shell */
+    .shell {
+      max-width: 64rem;
+      margin-inline: auto;
+      padding-inline: clamp(var(--space-md), 5vw, var(--space-2xl));
+      padding-block:  clamp(var(--space-lg), 4vw, var(--space-2xl));
+    }
+
+    /* Masthead */
+    .masthead {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: baseline;
+      column-gap: var(--space-lg);
+      row-gap: var(--space-2xs);
+      padding-bottom: var(--space-md);
+      border-bottom: 1px solid var(--color-border-strong);
+      margin-bottom: var(--space-2xl);
+    }
+    .masthead h1 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: clamp(var(--text-xl), 4vw, var(--text-2xl));
+      letter-spacing: -0.015em;
+      margin: 0;
+      line-height: 1;
+    }
+    .masthead .kicker {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+      margin: 0;
+      justify-self: end;
+      white-space: nowrap;
+    }
+    .masthead .colophon {
+      grid-column: 1 / -1;
+      font-family: var(--font-body);
+      font-style: italic;
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      max-width: 55ch;
+      margin: 0;
+    }
+    @media (max-width: 34rem) {
+      .masthead { grid-template-columns: 1fr; }
+      .masthead .kicker { justify-self: start; }
+    }
+
+    /* Sections */
+    section {
+      margin-bottom: var(--space-3xl);
+    }
+    section:last-of-type { margin-bottom: 0; }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+      margin: 0 0 var(--space-md);
+    }
+
+    /* Form */
+    form { margin: 0; }
+    .field-row {
+      display: grid;
+      grid-template-columns: minmax(14rem, 2fr) minmax(10rem, 1fr) auto;
+      gap: var(--space-md);
+      align-items: end;
+    }
+    @media (max-width: 44rem) {
+      .field-row { grid-template-columns: 1fr; }
+    }
+
+    .field { display: grid; gap: var(--space-2xs); }
+    .field > label {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+    }
+    .field > label .required {
+      font-style: normal;
+      color: var(--color-text-subtle);
+      margin-left: var(--space-xs);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    /* Inputs */
+    input[type="text"],
+    input[type="file"],
+    select,
+    textarea,
+    .speaker-row input {
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      color: var(--color-text);
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 0.625rem var(--space-md);
+      line-height: 1.4;
+      width: 100%;
+      transition: border-color 140ms ease-out, background-color 140ms ease-out;
+    }
+    input[type="file"] { padding: 0.5rem var(--space-sm); }
+    input[type="file"]::file-selector-button {
+      font: inherit;
+      font-size: var(--text-xs);
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-right: var(--space-md);
+      border: 1px solid var(--color-border-strong);
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--color-text);
+      padding: 0.4rem var(--space-md);
+      cursor: pointer;
+      transition: background-color 140ms ease-out;
+    }
+    input[type="file"]::file-selector-button:hover {
+      background: var(--color-surface-sunken);
+    }
+
+    select {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--color-text-muted) 50%),
+        linear-gradient(-45deg, transparent 50%, var(--color-text-muted) 50%);
+      background-position:
+        calc(100% - 18px) 50%,
+        calc(100% - 12px) 50%;
+      background-size: 6px 6px, 6px 6px;
+      background-repeat: no-repeat;
+      padding-right: 2.25rem;
+    }
+
+    input:hover,
+    select:hover,
+    textarea:hover { border-color: var(--color-border-strong); }
+
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    button:focus-visible,
+    a:focus-visible {
+      outline: 2px solid var(--color-focus);
+      outline-offset: 2px;
+    }
+
+    input[aria-invalid="true"] {
+      border-color: var(--color-danger);
+    }
+
+    textarea {
+      min-height: 18rem;
+      max-height: 60vh;
+      resize: vertical;
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      line-height: 1.65;
+    }
+
+    /* Buttons */
+    button,
+    a.button {
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      min-height: 2.75rem;
+      padding: 0 var(--space-lg);
+      border: 1px solid var(--color-border-strong);
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-xs);
+      text-decoration: none;
+      transition: background-color 140ms ease-out, border-color 140ms ease-out, color 140ms ease-out;
+    }
+    button:hover:not(:disabled),
+    a.button:hover { background: var(--color-surface-sunken); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    button.primary,
+    a.button:not(.ghost-button) {
+      background: var(--color-accent);
+      color: var(--color-on-accent);
+      border-color: var(--color-accent);
+    }
+    button.primary:hover:not(:disabled),
+    a.button:not(.ghost-button):hover {
+      background: var(--color-accent-hover);
+      border-color: var(--color-accent-hover);
+    }
+
+    a.button.ghost-button {
+      background: transparent;
+      color: var(--color-text);
+      border-color: var(--color-border-strong);
+    }
+    a.button.ghost-button:hover {
+      background: var(--color-surface-sunken);
+    }
+
+    /* File info */
+    .file-info {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      font-feature-settings: "tnum";
+      margin: var(--space-sm) 0 0;
+      min-height: 1.1rem;
+    }
+    .file-info.error {
+      color: var(--color-danger);
+      font-weight: 500;
+    }
+
+    /* Status / progress */
+    .status-block { margin-top: var(--space-xs); }
+    .status {
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      color: var(--color-text);
+      margin: 0;
+    }
+    .status:empty::before {
+      content: "En espera de archivo.";
+      color: var(--color-text-subtle);
+      font-style: italic;
+    }
+
+    .progress-steps {
+      list-style: none;
+      margin: var(--space-md) 0 0;
+      padding: 0;
+      display: grid;
+      gap: var(--space-2xs);
+    }
+    .progress-steps li {
+      position: relative;
+      padding-left: 1.75rem;
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      line-height: 1.55;
+    }
+    .progress-steps li::before {
+      content: "—";
+      position: absolute;
+      left: 0;
+      top: 0;
+      font-family: var(--font-mono);
+      color: var(--color-text-subtle);
+    }
+    .progress-steps li:last-child {
+      color: var(--color-text);
+      font-weight: 500;
+    }
+    .progress-steps li:last-child::before {
+      content: "▸";
+      color: var(--color-accent);
+    }
+
+    /* Speaker mapping */
+    .speaker-list { display: grid; gap: var(--space-sm); max-width: 32rem; }
+    .speaker-row {
+      display: grid;
+      grid-template-columns: minmax(6rem, auto) 1fr;
+      gap: var(--space-md);
+      align-items: center;
+    }
+    .speaker-row label {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      letter-spacing: 0.04em;
+      color: var(--color-text-muted);
+    }
+
+    /* Results split */
+    .panes {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+      gap: var(--space-2xl);
+      border-top: 1px solid var(--color-border-strong);
+      padding-top: var(--space-xl);
+    }
+    .pane {
+      display: grid;
+      gap: var(--space-md);
+      margin: 0;
+    }
+    .pane-head {
+      display: grid;
+      gap: var(--space-2xs);
+    }
+    .pane-head .section-label { margin: 0; }
+    .pane h2 {
+      font-family: var(--font-display);
+      font-size: var(--text-lg);
+      font-weight: 600;
+      letter-spacing: -0.005em;
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    /* JSON frame */
+    .json-frame {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-surface-sunken);
+      max-height: 28rem;
+      overflow: auto;
+    }
+    .json-frame pre {
+      margin: 0;
+      padding: var(--space-md);
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      line-height: 1.55;
+      color: var(--color-text);
+      background: transparent;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Actions row */
+    .actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+      align-items: center;
+    }
+    .pdf-slot {
+      margin: 0;
+      min-height: 2.75rem;
+      display: inline-flex;
+      align-items: center;
+    }
+    .pdf-slot:empty { min-height: 0; }
+
+    /* Utility */
+    [hidden] { display: none !important; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition: none !important;
+        animation: none !important;
+      }
+    }
   </style>
 </head>
 <body>
-  <header>
-    <h1>MinutAI</h1>
-    <span class="muted">Diarization (Deepgram) + Minutes (OpenAI) + PDF</span>
-  </header>
+  <main class="shell">
+    <header class="masthead">
+      <h1>MinutAI</h1>
+      <p class="kicker">Deepgram · OpenAI · PDF</p>
+      <p class="colophon">Transcripcion con diarizacion y minuta estructurada a partir de grabaciones de reuniones.</p>
+    </header>
 
-  <div class="card">
-    <form id="form">
-      <div class="form-row">
-        <input type="file" id="file" accept="audio/*" required />
-        <select id="language" title="Idioma de la transcripcion">
-          <option value="es">Espanol</option>
-          <option value="en">English</option>
-          <option value="pt">Portugues</option>
-          <option value="fr">Francais</option>
-          <option value="de">Deutsch</option>
-          <option value="it">Italiano</option>
-        </select>
-        <button type="submit" id="submitBtn">Procesar</button>
-      </div>
-      <div id="fileInfo" class="file-info"></div>
-    </form>
-    <div id="statusArea">
-      <p id="status" class="muted"></p>
-      <ul id="progressSteps" class="progress-steps"></ul>
-    </div>
-  </div>
+    <section aria-labelledby="upload-heading">
+      <h2 id="upload-heading" class="section-label">I · Cargar audio</h2>
+      <form id="form" novalidate>
+        <div class="field-row">
+          <div class="field">
+            <label for="file">Archivo de audio <span class="required">requerido</span></label>
+            <input id="file" type="file" accept="audio/*" required aria-describedby="fileInfo" />
+          </div>
+          <div class="field">
+            <label for="language">Idioma</label>
+            <select id="language">
+              <option value="es">Espanol</option>
+              <option value="en">English</option>
+              <option value="pt">Portugues</option>
+              <option value="fr">Francais</option>
+              <option value="de">Deutsch</option>
+              <option value="it">Italiano</option>
+            </select>
+          </div>
+          <div class="field">
+            <button type="submit" id="submitBtn" class="primary">Procesar</button>
+          </div>
+        </div>
+        <p id="fileInfo" class="file-info" role="status" aria-live="polite"></p>
+      </form>
+    </section>
 
-  <!-- Speaker mapping (hidden until processing completes) -->
-  <div id="speakerCard" class="card speaker-card" style="display:none;">
-    <h3>Mapeo de hablantes</h3>
-    <div id="speakerInputs"></div>
-    <button id="applySpeakers" style="margin-top:.5rem;">Aplicar nombres</button>
-  </div>
+    <section aria-labelledby="status-heading">
+      <h2 id="status-heading" class="section-label">II · Progreso</h2>
+      <div class="status-block">
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+        <ol id="progressSteps" class="progress-steps" aria-live="polite"></ol>
+      </div>
+    </section>
 
-  <div class="row">
-    <div class="card" style="flex:1; min-width: 280px;">
-      <h3>Minuta (JSON)</h3>
-      <pre id="json">{}</pre>
-      <div class="actions-row">
-        <button id="downloadJson" style="display:none;">Descargar JSON</button>
-        <a id="downloadTranscript" class="button" style="display:none; font-size:.85rem;" target="_blank">Descargar Transcripcion</a>
+    <section id="speakerCard" aria-labelledby="speaker-heading" style="display:none;">
+      <h2 id="speaker-heading" class="section-label">III · Mapeo de hablantes</h2>
+      <div id="speakerInputs" class="speaker-list"></div>
+      <div class="actions-row" style="margin-top: var(--space-md);">
+        <button id="applySpeakers">Aplicar nombres</button>
       </div>
-    </div>
-    <div class="card" style="flex:1; min-width: 280px;">
-      <h3>Resumen (Markdown)</h3>
-      <textarea id="md"></textarea>
-      <div class="actions-row">
-        <p id="pdf" style="margin:0;"></p>
-        <button id="regenBtn">Regenerar PDF</button>
-      </div>
-    </div>
-  </div>
+    </section>
+
+    <section class="panes" aria-label="Resultados">
+      <article class="pane">
+        <header class="pane-head">
+          <p class="section-label">IV · Minuta</p>
+          <h2>JSON estructurado</h2>
+        </header>
+        <div class="json-frame">
+          <pre id="json">{}</pre>
+        </div>
+        <div class="actions-row">
+          <button id="downloadJson" style="display:none;">Descargar JSON</button>
+          <a id="downloadTranscript" class="button ghost-button" style="display:none;" target="_blank" rel="noopener">Descargar transcripcion</a>
+        </div>
+      </article>
+
+      <article class="pane">
+        <header class="pane-head">
+          <p class="section-label">V · Resumen</p>
+          <h2>Markdown editable</h2>
+        </header>
+        <textarea id="md" aria-label="Resumen en formato markdown, editable"></textarea>
+        <div class="actions-row">
+          <div id="pdf" class="pdf-slot" aria-live="polite"></div>
+          <button id="regenBtn" class="primary" style="display:none;">Regenerar PDF</button>
+        </div>
+      </article>
+    </section>
+  </main>
 
   <script>
     const form = document.querySelector('#form');
@@ -120,15 +552,23 @@
     // File size validation
     fileInput.addEventListener('change', () => {
       const file = fileInput.files[0];
-      if (!file) { fileInfo.textContent = ''; return; }
+      if (!file) {
+        fileInfo.textContent = '';
+        fileInfo.className = 'file-info';
+        fileInput.removeAttribute('aria-invalid');
+        submitBtn.disabled = false;
+        return;
+      }
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
       if (file.size > MAX_FILE_SIZE) {
         fileInfo.textContent = `${file.name} (${sizeMB} MB) — Excede el limite de 100 MB`;
         fileInfo.className = 'file-info error';
+        fileInput.setAttribute('aria-invalid', 'true');
         submitBtn.disabled = true;
       } else {
-        fileInfo.textContent = `${file.name} (${sizeMB} MB)`;
+        fileInfo.textContent = `${file.name} · ${sizeMB} MB`;
         fileInfo.className = 'file-info';
+        fileInput.removeAttribute('aria-invalid');
         submitBtn.disabled = false;
       }
     });
@@ -142,7 +582,7 @@
       // Reset UI
       statusEl.textContent = 'Subiendo archivo...';
       progressSteps.innerHTML = '';
-      jsonEl.textContent = '';
+      jsonEl.textContent = '{}';
       mdEl.value = '';
       pdfEl.innerHTML = '';
       speakerCard.style.display = 'none';
@@ -231,15 +671,16 @@
         link.className = 'button';
         link.textContent = 'Descargar PDF';
         link.target = '_blank';
+        link.rel = 'noopener';
         pdfEl.appendChild(link);
       }
 
       // Show action buttons
-      regenBtn.style.display = 'inline-block';
-      downloadJsonBtn.style.display = 'inline-block';
+      regenBtn.style.display = 'inline-flex';
+      downloadJsonBtn.style.display = 'inline-flex';
       if (data.transcript_url) {
         downloadTranscriptBtn.href = data.transcript_url;
-        downloadTranscriptBtn.style.display = 'inline-block';
+        downloadTranscriptBtn.style.display = 'inline-flex';
       }
 
       // Build speaker mapping UI from speaker IDs
@@ -253,7 +694,17 @@
       speakers.forEach(spk => {
         const row = document.createElement('div');
         row.className = 'speaker-row';
-        row.innerHTML = `<label>${spk}:</label><input type="text" data-speaker="${spk}" placeholder="Nombre real" />`;
+        const inputId = `speaker-input-${spk}`;
+        const label = document.createElement('label');
+        label.htmlFor = inputId;
+        label.textContent = spk;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.id = inputId;
+        input.dataset.speaker = spk;
+        input.placeholder = 'Nombre real';
+        row.appendChild(label);
+        row.appendChild(input);
         speakerInputs.appendChild(row);
       });
       speakerCard.style.display = 'block';
@@ -312,6 +763,7 @@
           link.className = 'button';
           link.textContent = 'Descargar PDF';
           link.target = '_blank';
+          link.rel = 'noopener';
           pdfEl.appendChild(link);
         }
         statusEl.textContent = 'PDF regenerado.';
